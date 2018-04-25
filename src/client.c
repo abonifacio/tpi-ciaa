@@ -11,6 +11,7 @@
 #define SERVER_PORT     80
 #define NOMBRE_DISPOSITIVO     "CIAA"
 #define MAC_DISPOSITIVO     "ab:cd:ef:12:34:56"
+#define SAMPLE_RATE "8000"
 
 CONSOLE_PRINT_ENABLE
 DEBUG_PRINT_ENABLE
@@ -52,14 +53,16 @@ static void ESP_cleanRxBuffer( void ){
 
 static char* HTTP_generatePostRequest(){
 	TCP_DATA_TO_SEND[0] = 0;
-	char body[70];
+	static char body[100];
 	body[0] = 0;
 	char len[3];
 	strcat( body, "{\"mac\":\"" );
 	strcat( body, MAC_DISPOSITIVO );
 	strcat( body, "\",\"nombre\":\"" );
 	strcat( body, NOMBRE_DISPOSITIVO );
-	strcat( body, "\"}" );
+	strcat( body, "\",\"sampleRate\":" );
+	strcat( body, SAMPLE_RATE );
+	strcat( body, "}" );
 	itoa(strlen(body),len,10);
 	strcat( TCP_DATA_TO_SEND, "POST /dispositivos HTTP/1.1\nContent-Type: application/json\nContent-Length: ");
 	strcat( TCP_DATA_TO_SEND, len);
@@ -108,7 +111,7 @@ static bool_t ESP_sendData( char* strData, uint32_t strDataLen, bool_t tcp ){
    ESP_cleanRxBuffer();
 
    // Envio datos TCP/IP al servidor.
-   debugPrintlnString( ">>>> Envio datos al servidor..." );
+//   debugPrintlnString( ">>>> Envio datos al servidor..." );
 
    consolePrintString( "AT+CIPSEND=" );
    if(tcp){
@@ -173,7 +176,7 @@ static bool_t ESP_connectToServer(bool_t tcp){
                uartEsp01,
                NULL, 0,
                ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
-               10000
+               5000
             );
    const char needle[8] = "CONNECT";
    char* ptr = strstr(ESP_RESPONSE_BUFFER,needle);
@@ -200,7 +203,7 @@ static bool_t ESP_disconnectFromServer(){
                uartEsp01,
                "OK\r\n", 4,
                ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
-               10000
+               5000
             );
    if( !retVal ){
       debugPrintString( ">>>>    Error: No se puede desconectar del servidor:" );
@@ -228,7 +231,7 @@ static bool_t ESP_connecToWifiAP(){
                uartEsp01,
                "WIFI CONNECTED\r\nWIFI GOT IP\r\n\r\nOK\r\n", 35,
                ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
-               10000
+               5000
             );
    if( retVal ){
 	  debugPrintlnString(">>>> Conectado a la red" );

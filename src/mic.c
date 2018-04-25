@@ -33,7 +33,7 @@ void MIC_init(void)
     // Setup ADC0: 10-bit, 100kHz
     Chip_ADC_Init(LPC_ADC0, &adc_setup);
     Chip_ADC_SetResolution(LPC_ADC0, &adc_setup,ADC_8BITS);
-    Chip_ADC_SetSampleRate(LPC_ADC0, &adc_setup, 22000);
+    Chip_ADC_SetSampleRate(LPC_ADC0, &adc_setup, 8000);
 
     // Enable ADC0 CH1 and its interrupt
     Chip_ADC_EnableChannel(LPC_ADC0, ADC_CH1, ENABLE);
