@@ -8,13 +8,7 @@ static uint8_t dma_tc_adc;  /* TC: terminal count                 */
 
 static uint16_t dma_buffer[N_SAMPLES];
 
-static uint8_t buffer_promedio[8];
-
-static uint16_t aux=0,ind=0,indice=0;
-static char byte;
-
 static delay_t mi_delay;
-
 
 static void startDMATransfer(void);
 void DMA_IRQHandler(void);
@@ -83,28 +77,14 @@ bool_t MIC_sampleReady(void)
 	return delayRead( &mi_delay );
 }
 
-uint8_t MIC_loadSample(char* buffer)
-{
-	uint8_t j, retVal = 0;
-	byte = ADC_DR_RESULT(dma_buffer[0]);
-	//promedio movil
-	buffer_promedio[ind]=byte;
-	aux = 0;
-	for(j=0; j<10;j++){
-	   aux=aux+buffer_promedio[j];
-	}
-	aux=aux/10;
-	buffer[indice]=aux;
-	ind++;
-	if(ind == 10){
-	   ind = 0;
-	}
 
-	indice++;
-	if(indice == 100){
-	   indice = 0;
-	   retVal = 100;
-	}
+
+uint8_t MIC_loadSample(void)
+{
+	uint8_t retVal = 0;
+	retVal = ((dma_buffer[0]>>8)&(0x00FF));
+	if(retVal > 225)
+		retVal = 128;
 	startDMATransfer();
 	return retVal;
 }

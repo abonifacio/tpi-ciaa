@@ -1,17 +1,14 @@
+#include "constants.h"
 #include "client.h"
 #include <string.h>
 #include <stdlib.h>
 
-#define ESP01_RX_BUFF_SIZE         1024
 
-#define WIFI_SSID                  "FBI Surveillance Van"     // Setear Red Wi-Fi
-#define WIFI_PASSWORD              "bq99ec3c21" // Setear password
 
-#define SERVER_URL      "192.168.0.37"
-#define SERVER_PORT     80
-#define NOMBRE_DISPOSITIVO     "CIAA"
-#define MAC_DISPOSITIVO     "ab:cd:ef:12:34:56"
-#define SAMPLE_RATE "8000"
+#define READY 1
+#define SENDING 2
+#define WAITING 3
+#define FAILED 4
 
 CONSOLE_PRINT_ENABLE
 DEBUG_PRINT_ENABLE
@@ -25,7 +22,7 @@ static uint32_t ESP_RESPONSE_BUFFER_SIZE = ESP01_RX_BUFF_SIZE;
 
 static char TCP_DATA_TO_SEND[100];
 
-static uint32_t UDP_PORT;
+static uint32_t UDP_PORT = 1234;
 
 static void ESP_cleanRxBuffer( void );
 
@@ -33,7 +30,8 @@ static bool_t ESP_connecToWifiAP();
 
 static bool_t ESP_connectToServer(bool_t tcp);
 
-static bool_t ESP_sendData( char* strData, uint32_t strDataLen,bool_t udp );
+
+static bool_t ESP_sendTCP( char* strData, uint32_t strDataLen);
 
 static bool_t ESP_disconnectFromServer();
 
@@ -44,7 +42,9 @@ static char* HTTP_generateDeleteRequest();
 static char* HTTP_getBodyFromResponse(char* buffer);
 
 
-
+static char* ESP_audioBuffer;
+static uint32_t ESP_audioBufferSize;
+static uint8_t ESP_state = READY;
 
 static void ESP_cleanRxBuffer( void ){
    ESP_RESPONSE_BUFFER_SIZE = ESP01_RX_BUFF_SIZE;
@@ -104,23 +104,15 @@ static uint32_t HTTP_getPuerto(char* response){
 	return atoi(body);
 }
 
-static bool_t ESP_sendData( char* strData, uint32_t strDataLen, bool_t tcp ){
+static bool_t ESP_sendTCP( char* strData, uint32_t strDataLen){
 
    bool_t retVal = FALSE;
 
    ESP_cleanRxBuffer();
 
-   // Envio datos TCP/IP al servidor.
-//   debugPrintlnString( ">>>> Envio datos al servidor..." );
-
    consolePrintString( "AT+CIPSEND=" );
-   if(tcp){
-	   consolePrintString("3,");
-	   consolePrintInt( strDataLen + 2 );// El mas 2 es del \r\n
-   }else{
-	   consolePrintString("4,");
-	   consolePrintInt( strDataLen );
-   }
+   consolePrintString("3,");
+   consolePrintInt( strDataLen + 2 );// El mas 2 es del \r\n
    consolePrintString( "\r\n" );
    retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
 	  uartEsp01,
@@ -130,25 +122,22 @@ static bool_t ESP_sendData( char* strData, uint32_t strDataLen, bool_t tcp ){
    );
    if(retVal){
 	 consolePrintString( strData );
-	  if(tcp){
-		 ESP_cleanRxBuffer();
-		 consolePrintString("\r\n");
-		 retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
-			uartEsp01,
-			NULL, 0,
-			ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
-			5000
-		 );
-		 debugPrintlnString(ESP_RESPONSE_BUFFER);
-		 return TRUE;
-	  }
+	 ESP_cleanRxBuffer();
+	 consolePrintString("\r\n");
+	 retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
+		uartEsp01,
+		NULL, 0,
+		ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
+		5000
+	 );
+	 debugPrintlnString(ESP_RESPONSE_BUFFER);
+	 return TRUE;
    }else{
 	   debugPrintString( "Error al realizar CIPSEND" );
 	   debugPrintString( ESP_RESPONSE_BUFFER );
    }
    return retVal;
 }
-
 
 static bool_t ESP_connectToServer(bool_t tcp){
 
@@ -231,7 +220,7 @@ static bool_t ESP_connecToWifiAP(){
                uartEsp01,
                "WIFI CONNECTED\r\nWIFI GOT IP\r\n\r\nOK\r\n", 35,
                ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
-               5000
+               6000
             );
    if( retVal ){
 	  debugPrintlnString(">>>> Conectado a la red" );
@@ -279,7 +268,7 @@ bool_t CLIENT_register(){
 
 	request = HTTP_generatePostRequest();
 
-	 if(!ESP_sendData( request, strlen(request) ,TRUE) )
+	 if(!ESP_sendTCP( request, strlen(request)) )
 		  return FALSE;
 	 puerto = HTTP_getPuerto(ESP_RESPONSE_BUFFER);
 	 if(!puerto){
@@ -301,15 +290,49 @@ bool_t CLIENT_unregister(){
 	  return FALSE;
 
 	request = HTTP_generateDeleteRequest();
-	if(!ESP_sendData( request, strlen(request),TRUE)){
+	if(!ESP_sendTCP( request, strlen(request))){
 		return FALSE;
 	}
 	return ESP_disconnectFromServer();
 
 }
 
-bool_t CLIENT_send(char* buffer, uint32_t size){
-	return ESP_sendData(buffer,size,FALSE);
+void CLIENT_send(uint8_t byte){
+	uartWriteByte( uartEsp01, byte);
 }
 
+bool_t CLIENT_prepareSend(uint16_t size){
+	bool_t retVal = FALSE;
+	ESP_cleanRxBuffer();
+	consolePrintString( "AT+CIPSEND=4," );
+	consolePrintInt( size);
+	consolePrintString( "\r\n" );
+	retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
+		uartEsp01,
+		"\r\n\r\nOK\r\n>", 9,
+		ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
+		1000
+	 );
+	if(!retVal){
+		debugPrintlnString("Error en prepareSend");
+		debugPrintlnString(ESP_RESPONSE_BUFFER);
+	}
+	return retVal;
+}
+
+bool_t CLIENT_awaitResponse(void){
+	bool_t retVal = FALSE;
+	ESP_cleanRxBuffer();
+	retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
+		uartEsp01,
+		"\r\n\r\nOK", 6,
+		ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
+		1000
+	 );
+	if(!retVal){
+		debugPrintlnString("Error en awaitResponse");
+		debugPrintlnString(ESP_RESPONSE_BUFFER);
+	}
+	return retVal;
+}
 

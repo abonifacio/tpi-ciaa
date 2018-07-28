@@ -1,13 +1,16 @@
+#include "constants.h"
 #include "sapi.h"
 #include <string.h>
 #include "client.h"
 #include "mic.h"
+#include "stopwatch.h"
 
 #define UART_DEBUG                 UART_USB
 #define UART_ESP01                 UART_232
 #define UARTS_BAUD_RATE            115200
 
-char BUFFER[100];
+char BUFFER[BUFFER_SIZE];
+char AUXBUFFER[BUFFER_SIZE];
 
 DEBUG_PRINT_ENABLE
 
@@ -23,9 +26,12 @@ void stopProgramError(bool_t registered) {
 
 int main(void) {
 
-	uint8_t packet_size;
+	uint8_t recByte;
+	uint16_t processed = 0;
+	uint32_t nbrOfTicks,startTime;
 
 	boardConfig();
+	StopWatch_Init();
 	debugPrintConfigUart(UART_DEBUG, UARTS_BAUD_RATE);
 
 	if (!CLIENT_init(UART_ESP01, UART_DEBUG, UARTS_BAUD_RATE)) {
@@ -35,17 +41,30 @@ int main(void) {
 		stopProgramError(FALSE);
 	}
 
+
+	nbrOfTicks = StopWatch_UsToTicks(SAMPLE_DELAY_US);
+
 	MIC_init();
 
+
+	if(!CLIENT_prepareSend(BUFFER_SIZE)){
+		stopProgramError(TRUE);
+	}
+
+	startTime = StopWatch_Start();
+
 	while ( TRUE) {
-//		debugPrintlnString("En el while");
-		if (MIC_sampleReady()) {
-			packet_size = MIC_loadSample(BUFFER);
-			if (packet_size) {
-				CLIENT_send(BUFFER, packet_size);
-			}
+		if(StopWatch_Elapsed(startTime) >= nbrOfTicks){
+			recByte = MIC_loadSample();
+			startTime = StopWatch_Start();
+			CLIENT_send(recByte);
+			processed++;
 		}
-//		delay(20000);
+		if(processed==BUFFER_SIZE){
+			CLIENT_awaitResponse();
+			processed = 0;
+			while(!CLIENT_prepareSend(BUFFER_SIZE));
+		}
 	}
 
 	return 0;
