@@ -1,19 +1,8 @@
 #include "constants.h"
 #include "sapi.h"
-#include <string.h>
 #include "client.h"
 #include "mic.h"
 #include "stopwatch.h"
-
-#define UART_DEBUG                 UART_USB
-#define UART_ESP01                 UART_232
-#define UARTS_BAUD_RATE            115200
-
-char BUFFER[BUFFER_SIZE];
-char AUXBUFFER[BUFFER_SIZE];
-
-DEBUG_PRINT_ENABLE
-
 
 void stopProgramError(bool_t registered) {
 	if (registered) {
@@ -32,25 +21,19 @@ int main(void) {
 
 	boardConfig();
 	StopWatch_Init();
-	debugPrintConfigUart(UART_DEBUG, UARTS_BAUD_RATE);
 
-	if (!CLIENT_init(UART_ESP01, UART_DEBUG, UARTS_BAUD_RATE)) {
+	if (!CLIENT_init()) {
 		stopProgramError(FALSE);
 	}
 	if (!CLIENT_register()) {
 		stopProgramError(FALSE);
 	}
 
-
 	nbrOfTicks = StopWatch_UsToTicks(SAMPLE_DELAY_US);
-
 	MIC_init();
-
-
 	if(!CLIENT_prepareSend(BUFFER_SIZE)){
 		stopProgramError(TRUE);
 	}
-
 	startTime = StopWatch_Start();
 
 	while ( TRUE) {

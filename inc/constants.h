@@ -1,5 +1,3 @@
-#define ESP01_RX_BUFF_SIZE         1024
-
 #define WIFI_SSID                  "FBI Surveillance Van"     // Setear Red Wi-Fi
 #define WIFI_PASSWORD              "bq99ec3c21" // Setear password
 
@@ -10,3 +8,8 @@
 #define SAMPLE_RATE "11025"
 #define BUFFER_SIZE				   2048
 #define SAMPLE_DELAY_US				   90 //8khz
+#define UARTS_BAUD_RATE            115200
+
+#define UART_DEBUG                 UART_USB
+#define UART_ESP01                 UART_232
+

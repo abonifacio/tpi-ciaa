@@ -3,48 +3,27 @@
 #include <string.h>
 #include <stdlib.h>
 
-
-
-#define READY 1
-#define SENDING 2
-#define WAITING 3
-#define FAILED 4
+#define ESP01_RX_BUFF_SIZE         1024
 
 CONSOLE_PRINT_ENABLE
 DEBUG_PRINT_ENABLE
-
-uartMap_t uartEsp01 = UART_232;
-uartMap_t uartDebug = UART_USB;
 
 // ESP01 Rx Buffer
 static char ESP_RESPONSE_BUFFER[ ESP01_RX_BUFF_SIZE ];
 static uint32_t ESP_RESPONSE_BUFFER_SIZE = ESP01_RX_BUFF_SIZE;
 
 static char TCP_DATA_TO_SEND[100];
-
 static uint32_t UDP_PORT = 1234;
 
 static void ESP_cleanRxBuffer( void );
-
 static bool_t ESP_connecToWifiAP();
-
 static bool_t ESP_connectToServer(bool_t tcp);
-
-
 static bool_t ESP_sendTCP( char* strData, uint32_t strDataLen);
-
 static bool_t ESP_disconnectFromServer();
-
 static char* HTTP_generatePostRequest();
-
 static char* HTTP_generateDeleteRequest();
-
 static char* HTTP_getBodyFromResponse(char* buffer);
 
-
-static char* ESP_audioBuffer;
-static uint32_t ESP_audioBufferSize;
-static uint8_t ESP_state = READY;
 
 static void ESP_cleanRxBuffer( void ){
    ESP_RESPONSE_BUFFER_SIZE = ESP01_RX_BUFF_SIZE;
@@ -115,7 +94,7 @@ static bool_t ESP_sendTCP( char* strData, uint32_t strDataLen){
    consolePrintInt( strDataLen + 2 );// El mas 2 es del \r\n
    consolePrintString( "\r\n" );
    retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
-	  uartEsp01,
+	  UART_ESP01,
 	  "\r\n\r\nOK\r\n>", 9,
 	  ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
 	  5000
@@ -125,7 +104,7 @@ static bool_t ESP_sendTCP( char* strData, uint32_t strDataLen){
 	 ESP_cleanRxBuffer();
 	 consolePrintString("\r\n");
 	 retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
-		uartEsp01,
+		UART_ESP01,
 		NULL, 0,
 		ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
 		5000
@@ -162,7 +141,7 @@ static bool_t ESP_connectToServer(bool_t tcp){
    consolePrintString( "\r\n" );
    // No poner funciones entre el envio de comando y la espera de respuesta
    retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
-               uartEsp01,
+               UART_ESP01,
                NULL, 0,
                ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
                5000
@@ -189,7 +168,7 @@ static bool_t ESP_disconnectFromServer(){
 
    // No poner funciones entre el envio de comando y la espera de respuesta
    retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
-               uartEsp01,
+               UART_ESP01,
                "OK\r\n", 4,
                ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
                5000
@@ -217,7 +196,7 @@ static bool_t ESP_connecToWifiAP(){
 
    // No poner funciones entre el envio de comando y la espera de respuesta
    retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
-               uartEsp01,
+               UART_ESP01,
                "WIFI CONNECTED\r\nWIFI GOT IP\r\n\r\nOK\r\n", 35,
                ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
                6000
@@ -232,26 +211,25 @@ static bool_t ESP_connecToWifiAP(){
 }
 
 
-bool_t CLIENT_init( uartMap_t uartForEsp, uartMap_t uartForDebug, uint32_t baudRate ){
+bool_t CLIENT_init(void){
 
    bool_t retVal = FALSE;
-   uartEsp01 = uartForEsp;
-   uartDebug = uartForDebug;
 
-   // Inicializar UART_USB como salida de debug
-   debugPrintConfigUart( uartDebug, baudRate );
+   // Inicializar UART_DEBUG como salida de debug
+   debugPrintConfigUart( UART_DEBUG, UARTS_BAUD_RATE );
    debugPrintlnString( ">>>> UART_USB configurada como salida de debug." );
 
    // Inicializr otra UART donde se conecta el ESP01 como salida de consola
-   consolePrintConfigUart( uartEsp01, baudRate );
+   consolePrintConfigUart( UART_ESP01, UARTS_BAUD_RATE );
    debugPrintlnString( ">>>> UART_ESP (donde se conecta el ESP01), \r\n>>>> configurada como salida de consola.\r\n" );
 
+
    consolePrintString( "AT\r\n" );
-   retVal = waitForReceiveStringOrTimeoutBlocking( uartEsp01, "AT\r\n", 4, 500 );
+   retVal = waitForReceiveStringOrTimeoutBlocking( UART_ESP01, "AT\r\n", 4, 500 );
    if( retVal ){
       debugPrintlnString( ">>>>    Modulo ESP01 Wi-Fi detectado.\r\n" );
       consolePrintString("AT+CIPMUX=1\r\n");
-      retVal = waitForReceiveStringOrTimeoutBlocking(uartEsp01,"OK\r\n",4,500);
+      retVal = waitForReceiveStringOrTimeoutBlocking(UART_ESP01,"OK\r\n",4,500);
    } else{
       debugPrintlnString( ">>>>    Error: Modulo ESP01 Wi-Fi No detectado!!\r\n" );
    }
@@ -259,7 +237,7 @@ bool_t CLIENT_init( uartMap_t uartForEsp, uartMap_t uartForDebug, uint32_t baudR
 }
 
 
-bool_t CLIENT_register(){
+bool_t CLIENT_register(void){
 
 	char* request;
 	uint32_t puerto;
@@ -284,7 +262,7 @@ bool_t CLIENT_register(){
 
 }
 
-bool_t CLIENT_unregister(){
+bool_t CLIENT_unregister(void){
 	char* request;
 	if(!ESP_connectToServer(TRUE))
 	  return FALSE;
@@ -298,7 +276,7 @@ bool_t CLIENT_unregister(){
 }
 
 void CLIENT_send(uint8_t byte){
-	uartWriteByte( uartEsp01, byte);
+	uartWriteByte( UART_ESP01, byte);
 }
 
 bool_t CLIENT_prepareSend(uint16_t size){
@@ -308,7 +286,7 @@ bool_t CLIENT_prepareSend(uint16_t size){
 	consolePrintInt( size);
 	consolePrintString( "\r\n" );
 	retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
-		uartEsp01,
+		UART_ESP01,
 		"\r\n\r\nOK\r\n>", 9,
 		ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
 		1000
@@ -324,7 +302,7 @@ bool_t CLIENT_awaitResponse(void){
 	bool_t retVal = FALSE;
 	ESP_cleanRxBuffer();
 	retVal = receiveBytesUntilReceiveStringOrTimeoutBlocking(
-		uartEsp01,
+		UART_ESP01,
 		"\r\n\r\nOK", 6,
 		ESP_RESPONSE_BUFFER, &ESP_RESPONSE_BUFFER_SIZE,
 		1000
